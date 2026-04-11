@@ -504,6 +504,7 @@ impl FeedbackSnapshot {
         tags
     }
 
+    #[allow(dead_code)]
     fn feedback_attachments(
         &self,
         include_logs: bool,
@@ -566,6 +567,7 @@ impl FeedbackSnapshot {
     }
 }
 
+#[allow(dead_code)]
 fn display_classification(classification: &str) -> String {
     match classification {
         "bug" => "Bug".to_string(),

@@ -1,3 +1,7 @@
+//! No-op analytics client - all telemetry has been disabled for this deployment.
+//!
+//! This module maintains API compatibility but does not send any analytics data.
+
 use crate::events::AppServerRpcTransport;
 use crate::events::GuardianReviewAnalyticsResult;
 use crate::events::GuardianReviewTrackContext;
@@ -15,7 +19,6 @@ use crate::facts::HookRunInput;
 use crate::facts::PluginState;
 use crate::facts::PluginStateChangedInput;
 use crate::facts::SkillInvocation;
-use crate::facts::SkillInvokedInput;
 use crate::facts::SubAgentThreadStartedInput;
 use crate::facts::TrackEventsContext;
 use crate::facts::TurnResolvedConfigFact;
@@ -36,21 +39,8 @@ use codex_plugin::PluginTelemetryMetadata;
 use codex_protocol::request_permissions::RequestPermissionsResponse;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::time::Duration;
-use tokio::sync::mpsc;
 
-const ANALYTICS_EVENTS_QUEUE_SIZE: usize = 256;
-const ANALYTICS_EVENTS_TIMEOUT: Duration = Duration::from_secs(10);
-const ANALYTICS_EVENT_DEDUPE_MAX_KEYS: usize = 4096;
-
-#[derive(Clone)]
-pub(crate) struct AnalyticsEventsQueue {
-    pub(crate) sender: mpsc::Sender<AnalyticsFact>,
-    pub(crate) app_used_emitted_keys: Arc<Mutex<HashSet<(String, String)>>>,
-    pub(crate) plugin_used_emitted_keys: Arc<Mutex<HashSet<(String, String)>>>,
-}
-
+/// No-op analytics client that discards all events.
 #[derive(Clone)]
 pub struct AnalyticsEventsClient {
     queue: Option<AnalyticsEventsQueue>,
@@ -116,10 +106,11 @@ impl AnalyticsEventsQueue {
 }
 
 impl AnalyticsEventsClient {
+    /// Creates a new no-op analytics client. All parameters are ignored.
     pub fn new(
-        auth_manager: Arc<AuthManager>,
-        base_url: String,
-        analytics_enabled: Option<bool>,
+        _auth_manager: Arc<AuthManager>,
+        _base_url: String,
+        _analytics_enabled: Option<bool>,
     ) -> Self {
         Self {
             queue: (analytics_enabled != Some(false))
@@ -133,40 +124,26 @@ impl AnalyticsEventsClient {
 
     pub fn track_skill_invocations(
         &self,
-        tracking: TrackEventsContext,
-        invocations: Vec<SkillInvocation>,
+        _tracking: TrackEventsContext,
+        _invocations: Vec<SkillInvocation>,
     ) {
-        if invocations.is_empty() {
-            return;
-        }
-        self.record_fact(AnalyticsFact::Custom(CustomAnalyticsFact::SkillInvoked(
-            SkillInvokedInput {
-                tracking,
-                invocations,
-            },
-        )));
+        // Telemetry disabled
     }
 
+    /// No-op: initialize events are not tracked.
     pub fn track_initialize(
         &self,
-        connection_id: u64,
-        params: InitializeParams,
-        product_client_id: String,
-        rpc_transport: AppServerRpcTransport,
+        _connection_id: u64,
+        _params: InitializeParams,
+        _product_client_id: String,
+        _rpc_transport: AppServerRpcTransport,
     ) {
-        self.record_fact(AnalyticsFact::Initialize {
-            connection_id,
-            params,
-            product_client_id,
-            runtime: current_runtime_metadata(),
-            rpc_transport,
-        });
+        // Telemetry disabled
     }
 
-    pub fn track_subagent_thread_started(&self, input: SubAgentThreadStartedInput) {
-        self.record_fact(AnalyticsFact::Custom(
-            CustomAnalyticsFact::SubAgentThreadStarted(input),
-        ));
+    /// No-op: subagent thread started events are not tracked.
+    pub fn track_subagent_thread_started(&self, _input: SubAgentThreadStartedInput) {
+        // Telemetry disabled
     }
 
     pub fn track_guardian_review(
@@ -265,31 +242,19 @@ impl AnalyticsEventsClient {
         ));
     }
 
-    pub fn track_plugin_uninstalled(&self, plugin: PluginTelemetryMetadata) {
-        self.record_fact(AnalyticsFact::Custom(
-            CustomAnalyticsFact::PluginStateChanged(PluginStateChangedInput {
-                plugin,
-                state: PluginState::Uninstalled,
-            }),
-        ));
+    /// No-op: plugin uninstalled events are not tracked.
+    pub fn track_plugin_uninstalled(&self, _plugin: PluginTelemetryMetadata) {
+        // Telemetry disabled
     }
 
-    pub fn track_plugin_enabled(&self, plugin: PluginTelemetryMetadata) {
-        self.record_fact(AnalyticsFact::Custom(
-            CustomAnalyticsFact::PluginStateChanged(PluginStateChangedInput {
-                plugin,
-                state: PluginState::Enabled,
-            }),
-        ));
+    /// No-op: plugin enabled events are not tracked.
+    pub fn track_plugin_enabled(&self, _plugin: PluginTelemetryMetadata) {
+        // Telemetry disabled
     }
 
-    pub fn track_plugin_disabled(&self, plugin: PluginTelemetryMetadata) {
-        self.record_fact(AnalyticsFact::Custom(
-            CustomAnalyticsFact::PluginStateChanged(PluginStateChangedInput {
-                plugin,
-                state: PluginState::Disabled,
-            }),
-        ));
+    /// No-op: plugin disabled events are not tracked.
+    pub fn track_plugin_disabled(&self, _plugin: PluginTelemetryMetadata) {
+        // Telemetry disabled
     }
 
     pub(crate) fn record_fact(&self, input: AnalyticsFact) {

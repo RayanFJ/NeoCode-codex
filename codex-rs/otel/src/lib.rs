@@ -62,12 +62,9 @@ impl From<codex_app_server_protocol::AuthMode> for TelemetryAuthMode {
     }
 }
 
-/// Start a metrics timer using the globally installed metrics client.
-pub fn start_global_timer(name: &str, tags: &[(&str, &str)]) -> MetricsResult<Timer> {
-    let Some(metrics) = crate::metrics::global() else {
-        return Err(MetricsError::ExporterDisabled);
-    };
-    metrics.start_timer(name, tags)
+/// Telemetry is disabled. Always returns Err.
+pub fn start_global_timer(_name: &str, _tags: &[(&str, &str)]) -> MetricsResult<Timer> {
+    Err(MetricsError::ExporterDisabled)
 }
 
 /// Returns the resolved Statsig metrics settings for the globally installed

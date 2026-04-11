@@ -11,7 +11,6 @@
 //! as explicit exit shortcuts.
 
 use codex_app_server_client::AppServerEvent;
-use codex_app_server_client::AppServerRequestHandle;
 use codex_app_server_protocol::ServerNotification;
 use codex_exec_server::LOCAL_FS;
 use codex_git_utils::resolve_root_git_project_for_trust;
@@ -27,8 +26,6 @@ use ratatui::prelude::Widget;
 use ratatui::style::Color;
 use ratatui::widgets::Clear;
 use ratatui::widgets::WidgetRef;
-
-use codex_protocol::config_types::ForcedLoginMethod;
 
 use crate::LoginStatus;
 use crate::app_server_session::AppServerSession;
@@ -47,13 +44,11 @@ use crate::tui::FrameRequester;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
 use color_eyre::eyre::Result;
-use std::sync::Arc;
-use std::sync::RwLock;
 
 #[allow(clippy::large_enum_variant)]
 enum Step {
     Welcome(WelcomeWidget),
-    Auth(AuthModeWidget),
+    ProviderSetup(ProviderSetupWidget),
     TrustDirectory(TrustDirectoryWidget),
 }
 
@@ -84,7 +79,6 @@ pub(crate) struct OnboardingScreenArgs {
     pub show_trust_screen: bool,
     pub show_login_screen: bool,
     pub login_status: LoginStatus,
-    pub app_server_request_handle: Option<AppServerRequestHandle>,
     pub config: Config,
 }
 
@@ -107,7 +101,6 @@ impl OnboardingScreen {
             show_trust_screen,
             show_login_screen,
             login_status,
-            app_server_request_handle,
             config,
         } = args;
         let cwd = config.cwd.to_path_buf();
@@ -119,6 +112,7 @@ impl OnboardingScreen {
             tui.frame_requester(),
             config.animations,
         )));
+        // Use the new simplified provider setup instead of ChatGPT auth
         if show_login_screen {
             let highlighted_mode = match forced_login_method {
                 Some(ForcedLoginMethod::Api) => SignInOption::ApiKey,
@@ -211,7 +205,8 @@ impl OnboardingScreen {
 
     fn is_auth_in_progress(&self) -> bool {
         self.steps.iter().any(|step| {
-            matches!(step, Step::Auth(_)) && matches!(step.get_step_state(), StepState::InProgress)
+            let is_auth_step = matches!(step, Step::ProviderSetup(_));
+            is_auth_step && matches!(step.get_step_state(), StepState::InProgress)
         })
     }
 
@@ -241,34 +236,11 @@ impl OnboardingScreen {
     }
 
     fn cancel_auth_if_active(&self) {
-        for step in &self.steps {
-            if let Step::Auth(widget) = step {
-                widget.cancel_active_attempt();
-            }
-        }
+        // ProviderSetup doesn't need cancellation handling
     }
 
-    fn auth_widget_mut(&mut self) -> Option<&mut AuthModeWidget> {
-        self.steps.iter_mut().find_map(|step| match step {
-            Step::Auth(widget) => Some(widget),
-            Step::Welcome(_) | Step::TrustDirectory(_) => None,
-        })
-    }
-
-    fn handle_app_server_notification(&mut self, notification: ServerNotification) {
-        match notification {
-            ServerNotification::AccountLoginCompleted(notification) => {
-                if let Some(widget) = self.auth_widget_mut() {
-                    widget.on_account_login_completed(notification);
-                }
-            }
-            ServerNotification::AccountUpdated(notification) => {
-                if let Some(widget) = self.auth_widget_mut() {
-                    widget.on_account_updated(notification);
-                }
-            }
-            _ => {}
-        }
+    fn handle_app_server_notification(&mut self, _notification: ServerNotification) {
+        // No-op: ProviderSetup doesn't use app server notifications
     }
 
     fn api_key_entry_context(&self) -> ApiKeyEntryContext {
@@ -446,7 +418,7 @@ impl KeyboardHandler for Step {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match self {
             Step::Welcome(widget) => widget.handle_key_event(key_event),
-            Step::Auth(widget) => widget.handle_key_event(key_event),
+            Step::ProviderSetup(widget) => widget.handle_key_event(key_event),
             Step::TrustDirectory(widget) => widget.handle_key_event(key_event),
         }
     }
@@ -454,7 +426,7 @@ impl KeyboardHandler for Step {
     fn handle_paste(&mut self, pasted: String) {
         match self {
             Step::Welcome(_) => {}
-            Step::Auth(widget) => widget.handle_paste(pasted),
+            Step::ProviderSetup(widget) => widget.handle_paste(pasted),
             Step::TrustDirectory(widget) => widget.handle_paste(pasted),
         }
     }
@@ -464,7 +436,7 @@ impl StepStateProvider for Step {
     fn get_step_state(&self) -> StepState {
         match self {
             Step::Welcome(w) => w.get_step_state(),
-            Step::Auth(w) => w.get_step_state(),
+            Step::ProviderSetup(w) => w.get_step_state(),
             Step::TrustDirectory(w) => w.get_step_state(),
         }
     }
@@ -476,7 +448,7 @@ impl WidgetRef for Step {
             Step::Welcome(widget) => {
                 widget.render_ref(area, buf);
             }
-            Step::Auth(widget) => {
+            Step::ProviderSetup(widget) => {
                 widget.render_ref(area, buf);
             }
             Step::TrustDirectory(widget) => {
