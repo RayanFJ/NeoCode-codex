@@ -501,6 +501,25 @@ impl StepStateProvider for ProviderSetupWidget {
     }
 }
 
+impl ProviderSetupWidget {
+    pub(crate) fn is_text_entry_active(&self) -> bool {
+        let state = self.state.read().unwrap();
+        matches!(
+            &*state,
+            ProviderSetupState::EnteringUrl(_) | ProviderSetupState::EnteringKey(_)
+        )
+    }
+
+    pub(crate) fn text_entry_has_text(&self) -> bool {
+        let state = self.state.read().unwrap();
+        match &*state {
+            ProviderSetupState::EnteringUrl(input)
+            | ProviderSetupState::EnteringKey(input) => !input.value.is_empty(),
+            _ => false,
+        }
+    }
+}
+
 impl WidgetRef for &ProviderSetupWidget {
     fn render_ref(&self, area: Rect, buf: &mut Buffer) {
         Clear.render(area, buf);

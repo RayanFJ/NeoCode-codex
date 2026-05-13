@@ -222,7 +222,20 @@ impl OnboardingScreen {
     }
 
     fn api_key_entry_context(&self) -> ApiKeyEntryContext {
-        ApiKeyEntryContext::default()
+        self.steps
+            .iter()
+            .find_map(|step| {
+                if let Step::ProviderSetup(widget) = step {
+                    if widget.is_text_entry_active() {
+                        return Some(ApiKeyEntryContext {
+                            active: true,
+                            has_text: widget.text_entry_has_text(),
+                        });
+                    }
+                }
+                None
+            })
+            .unwrap_or_default()
     }
 }
 
