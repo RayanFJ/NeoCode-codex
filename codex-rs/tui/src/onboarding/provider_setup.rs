@@ -754,6 +754,7 @@ async fn fetch_models_from_api(api_url: &str, api_key: &str) -> Result<Vec<ApiMo
 }
 
 /// Get the provider configuration if setup is complete.
+#[allow(dead_code)]
 pub fn get_provider_config(widget: &ProviderSetupWidget) -> Option<ProviderConfig> {
     let state = widget.state.read().unwrap();
     if let ProviderSetupState::Complete(config) = &*state {

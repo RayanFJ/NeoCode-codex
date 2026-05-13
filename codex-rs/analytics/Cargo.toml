@@ -26,6 +26,7 @@ sha1 = { workspace = true }
 tokio = { workspace = true, features = [
     "macros",
     "rt-multi-thread",
+    "sync",
 ] }
 tracing = { workspace = true, features = ["log"] }
 

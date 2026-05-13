@@ -321,6 +321,7 @@ pub(crate) enum AnalyticsFact {
     Custom(CustomAnalyticsFact),
 }
 
+#[allow(dead_code)]
 pub(crate) enum CustomAnalyticsFact {
     SubAgentThreadStarted(SubAgentThreadStartedInput),
     Compaction(Box<CodexCompactionEvent>),
@@ -371,6 +372,7 @@ pub(crate) struct PluginStateChangedInput {
     pub state: PluginState,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub(crate) enum PluginState {
     Installed,

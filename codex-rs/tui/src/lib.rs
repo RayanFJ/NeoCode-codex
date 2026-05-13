@@ -1255,9 +1255,6 @@ async fn run_ratatui_app(
                 show_login_screen,
                 show_trust_screen: should_show_trust_screen_flag,
                 login_status,
-                app_server_request_handle: app_server
-                    .as_ref()
-                    .map(AppServerSession::request_handle),
                 config: initial_config.clone(),
             },
             if show_login_screen {

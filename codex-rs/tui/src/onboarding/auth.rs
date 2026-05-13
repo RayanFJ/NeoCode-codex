@@ -109,6 +109,7 @@ use super::onboarding_screen::StepState;
 
 mod headless_chatgpt_login;
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub(crate) enum SignInState {
     PickMode,
@@ -271,6 +272,7 @@ pub(crate) struct AuthModeWidget {
     pub animations_suppressed: Cell<bool>,
 }
 
+#[allow(dead_code)]
 impl AuthModeWidget {
     pub(crate) fn set_animations_suppressed(&self, suppressed: bool) {
         self.animations_suppressed.set(suppressed);

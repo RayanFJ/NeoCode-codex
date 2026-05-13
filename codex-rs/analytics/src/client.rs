@@ -7,7 +7,6 @@ use crate::events::GuardianReviewAnalyticsResult;
 use crate::events::GuardianReviewTrackContext;
 use crate::events::TrackEventRequest;
 use crate::events::TrackEventsRequest;
-use crate::events::current_runtime_metadata;
 use crate::facts::AnalyticsFact;
 use crate::facts::AnalyticsJsonRpcError;
 use crate::facts::AppInvocation;
@@ -39,11 +38,24 @@ use codex_plugin::PluginTelemetryMetadata;
 use codex_protocol::request_permissions::RequestPermissionsResponse;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::Mutex;
+use tokio::sync::mpsc;
+
+const ANALYTICS_EVENTS_QUEUE_SIZE: usize = 1_000;
+const ANALYTICS_EVENT_DEDUPE_MAX_KEYS: usize = 1_000;
+const ANALYTICS_EVENTS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// No-op analytics client that discards all events.
 #[derive(Clone)]
 pub struct AnalyticsEventsClient {
     queue: Option<AnalyticsEventsQueue>,
+}
+
+#[derive(Clone)]
+struct AnalyticsEventsQueue {
+    sender: mpsc::Sender<AnalyticsFact>,
+    app_used_emitted_keys: Arc<Mutex<HashSet<(String, String)>>>,
+    plugin_used_emitted_keys: Arc<Mutex<HashSet<(String, String)>>>,
 }
 
 impl AnalyticsEventsQueue {
@@ -108,9 +120,9 @@ impl AnalyticsEventsQueue {
 impl AnalyticsEventsClient {
     /// Creates a new no-op analytics client. All parameters are ignored.
     pub fn new(
-        _auth_manager: Arc<AuthManager>,
-        _base_url: String,
-        _analytics_enabled: Option<bool>,
+        auth_manager: Arc<AuthManager>,
+        base_url: String,
+        analytics_enabled: Option<bool>,
     ) -> Self {
         Self {
             queue: (analytics_enabled != Some(false))

@@ -33,10 +33,8 @@ use crate::key_hint::KeyBindingListExt;
 use crate::legacy_core::config::Config;
 #[cfg(target_os = "windows")]
 use crate::legacy_core::windows_sandbox::WindowsSandboxLevelExt;
-use crate::onboarding::auth::AuthModeWidget;
-use crate::onboarding::auth::SignInOption;
-use crate::onboarding::auth::SignInState;
 use crate::onboarding::keys;
+use crate::onboarding::provider_setup::ProviderSetupWidget;
 use crate::onboarding::trust_directory::TrustDirectorySelection;
 use crate::onboarding::trust_directory::TrustDirectoryWidget;
 use crate::onboarding::welcome::WelcomeWidget;
@@ -105,34 +103,18 @@ impl OnboardingScreen {
         } = args;
         let cwd = config.cwd.to_path_buf();
         let codex_home = config.codex_home.to_path_buf();
-        let forced_login_method = config.forced_login_method;
         let mut steps: Vec<Step> = Vec::new();
         steps.push(Step::Welcome(WelcomeWidget::new(
             !matches!(login_status, LoginStatus::NotAuthenticated),
             tui.frame_requester(),
             config.animations,
         )));
-        // Use the new simplified provider setup instead of ChatGPT auth
         if show_login_screen {
-            let highlighted_mode = match forced_login_method {
-                Some(ForcedLoginMethod::Api) => SignInOption::ApiKey,
-                _ => SignInOption::ChatGpt,
-            };
-            if let Some(app_server_request_handle) = app_server_request_handle {
-                steps.push(Step::Auth(AuthModeWidget {
-                    request_frame: tui.frame_requester(),
-                    highlighted_mode,
-                    error: Arc::new(RwLock::new(None)),
-                    sign_in_state: Arc::new(RwLock::new(SignInState::PickMode)),
-                    login_status,
-                    app_server_request_handle,
-                    forced_login_method,
-                    animations_enabled: config.animations,
-                    animations_suppressed: std::cell::Cell::new(false),
-                }));
-            } else {
-                tracing::warn!("skipping onboarding login step without app-server request handle");
-            }
+            steps.push(Step::ProviderSetup(ProviderSetupWidget::new(
+                tui.frame_requester(),
+                codex_home.clone(),
+                config.animations,
+            )));
         }
         #[cfg(target_os = "windows")]
         let show_windows_create_sandbox_hint =
@@ -195,12 +177,8 @@ impl OnboardingScreen {
     }
 
     fn should_suppress_animations(&self) -> bool {
-        // Freeze the whole onboarding screen when auth is showing copyable login
-        // material so terminal selection is not interrupted by redraws.
-        self.current_steps().into_iter().any(|step| match step {
-            Step::Auth(widget) => widget.should_suppress_animations(),
-            Step::Welcome(_) | Step::TrustDirectory(_) => false,
-        })
+        let _ = self.current_steps();
+        false
     }
 
     fn is_auth_in_progress(&self) -> bool {
@@ -244,19 +222,7 @@ impl OnboardingScreen {
     }
 
     fn api_key_entry_context(&self) -> ApiKeyEntryContext {
-        self.steps
-            .iter()
-            .find_map(|step| {
-                if let Step::Auth(widget) = step {
-                    Some(ApiKeyEntryContext {
-                        active: widget.is_api_key_entry_active(),
-                        has_text: widget.api_key_entry_has_text(),
-                    })
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_default()
+        ApiKeyEntryContext::default()
     }
 }
 
@@ -345,8 +311,7 @@ impl WidgetRef for &OnboardingScreen {
         for step in self.current_steps() {
             match step {
                 Step::Welcome(widget) => widget.set_animations_suppressed(suppress_animations),
-                Step::Auth(widget) => widget.set_animations_suppressed(suppress_animations),
-                Step::TrustDirectory(_) => {}
+                Step::ProviderSetup(_) | Step::TrustDirectory(_) => {}
             }
         }
 
@@ -466,8 +431,6 @@ pub(crate) async fn run_onboarding_app(
     use tokio_stream::StreamExt;
 
     let mut onboarding_screen = OnboardingScreen::new(tui, args).await;
-    // One-time guard to fully clear the screen after ChatGPT login success message is shown
-    let mut did_full_clear_after_success = false;
 
     tui.draw(u16::MAX, |frame| {
         frame.render_widget_ref(&onboarding_screen, frame.area());
@@ -488,36 +451,6 @@ pub(crate) async fn run_onboarding_app(
                             onboarding_screen.handle_paste(text);
                         }
                         TuiEvent::Draw | TuiEvent::Resize => {
-                            if !did_full_clear_after_success
-                                && onboarding_screen.steps.iter().any(|step| {
-                                    if let Step::Auth(w) = step {
-                                        w.sign_in_state.read().is_ok_and(|g| {
-                                            matches!(&*g, super::auth::SignInState::ChatGptSuccessMessage)
-                                        })
-                                    } else {
-                                        false
-                                    }
-                                })
-                            {
-                                // Reset any lingering SGR (underline/color) before clearing
-                                let _ = ratatui::crossterm::execute!(
-                                    std::io::stdout(),
-                                    ratatui::crossterm::style::SetAttribute(
-                                        ratatui::crossterm::style::Attribute::Reset
-                                    ),
-                                    ratatui::crossterm::style::SetAttribute(
-                                        ratatui::crossterm::style::Attribute::NoUnderline
-                                    ),
-                                    ratatui::crossterm::style::SetForegroundColor(
-                                        ratatui::crossterm::style::Color::Reset
-                                    ),
-                                    ratatui::crossterm::style::SetBackgroundColor(
-                                        ratatui::crossterm::style::Color::Reset
-                                    )
-                                );
-                                let _ = tui.terminal.clear();
-                                did_full_clear_after_success = true;
-                            }
                             let _ = tui.draw(u16::MAX, |frame| {
                                 frame.render_widget_ref(&onboarding_screen, frame.area());
                             });
